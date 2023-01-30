@@ -1,0 +1,52 @@
+currentBuild.rawBuild.project.description = 'Pipeline for importing Grafana data sources'
+
+pipeline {
+  agent { label 'docker-agents' } 
+  options {
+    buildDiscarder logRotator(artifactDaysToKeepStr: '', artifactNumToKeepStr: '', daysToKeepStr: '', numToKeepStr: '5')
+  }
+  parameters {
+    string defaultValue: '', description: 'Data source to import (e.g. datasource-1.json)', name: 'grafanaDataSource', trim: true
+    string defaultValue: '', description: 'Data sources repo url', name: 'gitUrl', trim: true
+    string defaultValue: '', description: 'Data sources repo branch', name: 'gitBranch', trim: true
+    string defaultValue: '', description: 'Source dir in data sources repo', name: 'gitDir', trim: true
+    string defaultValue: '', description: 'Git credentials id', name: 'gitCredentials', trim: true
+    string defaultValue: '', description: 'Grafana url', name: 'grafanaUrl', trim: true
+    string defaultValue: '', description: 'Grafana api key id', name: 'grafanaCredentials', trim: true
+  }
+  stages {
+    stage('Pre-check') {
+      agent any
+      when {
+        anyOf {
+          equals expected: '', actual: grafanaDataSource
+          equals expected: '', actual: gitUrl
+          equals expected: '', actual: gitBranch
+          equals expected: '', actual: gitCredentials
+          equals expected: '', actual: grafanaUrl
+        }
+      }
+      steps {
+        error 'One or more of the required job parameters is empty.'
+      }
+      post {
+        cleanup {
+          cleanWs()
+        }
+      }
+    }
+    stage('Import') {
+      agent {
+        dockerfile true
+      }
+      steps {
+        dir('./data-sources') {
+          checkout([$class: 'GitSCM', branches: [[name: '*/$gitBranch']], extensions: [[$class: 'LocalBranch', localBranch: gitBranch]], userRemoteConfigs: [[credentialsId: gitCredentials, url: gitUrl]]])
+        }
+        withCredentials([string(credentialsId: grafanaCredentials, variable: 'grafanaApiKey')]) {
+          sh './scripts/datasource-import.sh -k "$grafanaApiKey" -u "$grafanaUrl" -d "./data-sources/$gitDir$grafanaDataSource"'
+        }
+      }
+    }
+  }
+}
