@@ -42,7 +42,7 @@ if [ $counter -gt 0 ]; then
 	while [ $i -lt $counter ]; do
 		id=$(echo $data_sources | jq -j --arg i "$i" '.[$i | tonumber].id')
 		config=$(curl -ks -H "Authorization: Bearer $grafana_api_key" $grafana_url/api/datasources/$id)
-		name=$(echo $config | jq -j '.name | gsub("\\s";"-") | ascii_downcase')
+		name=$(echo $config | jq -j '.name | gsub("\\(|\\)|\\[|\\]";"") | gsub("_|-";" ") | gsub("\\s{2,}";" ") | gsub("\\s";"-") | ascii_downcase')
 		echo $config > "$out_dir$([ ${out_dir#${out_dir%?}} != '/' ] && printf '/')$name.json"
 		echo "Saved data source with id=$id to file $name.json"
 		let "i+=1"
